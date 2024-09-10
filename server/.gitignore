@@ -1,0 +1,11 @@
+# Ambiente
+.env
+
+# Dependências
+/node_modules
+
+# IDEs e editores de texto
+.vscode/
+
+# Outros arquivos
+package-lock.json
