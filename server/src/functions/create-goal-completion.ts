@@ -3,21 +3,21 @@ import { db } from '../db'
 import { goalCompletions, goals } from '../db/schema'
 import dayjs from 'dayjs'
 
-interface CreateGoalCompletionRequest {
+interface createGoalCompletionRequest {
   goalId: string
 }
 
 export async function createGoalCompletion({
   goalId,
-}: CreateGoalCompletionRequest) {
+}: createGoalCompletionRequest) {
   const firstDayOfWeek = dayjs().startOf('week').toDate()
   const lastDayOfWeek = dayjs().endOf('week').toDate()
 
-  const goalCompletionsCounts = db.$with('goal_completion_counts').as(
+  const goalCompletionCounts = db.$with('goal_completion_counts').as(
     db
       .select({
-        goalId: goalCompletions.goalId,
         completionCount: count(goalCompletions.id).as('completionCount'),
+        goalId: goalCompletions.goalId,
       })
       .from(goalCompletions)
       .where(
@@ -31,30 +31,30 @@ export async function createGoalCompletion({
   )
 
   const result = await db
-    .with(goalCompletionsCounts)
+    .with(goalCompletionCounts)
     .select({
+      completionCount: sql /*sql*/`
+      COALESCE(${goalCompletionCounts.completionCount}, 0)
+    `.mapWith(Number),
       desiredWeeklyFrequency: goals.desiredWeeklyFrequency,
-      completionCount: sql`
-        COALESCE(${goalCompletionsCounts.completionCount},0)
-      `.mapWith(Number),
     })
     .from(goals)
-    .leftJoin(goalCompletionsCounts, eq(goalCompletionsCounts.goalId, goals.id))
+    .leftJoin(goalCompletionCounts, eq(goalCompletionCounts.goalId, goals.id))
     .where(eq(goals.id, goalId))
     .limit(1)
 
   const { completionCount, desiredWeeklyFrequency } = result[0]
+
   if (completionCount >= desiredWeeklyFrequency) {
-    throw new Error('Goal alredy completed this week!')
+    throw new Error('Goal already compleated this week')
   }
 
   const insertResult = await db
     .insert(goalCompletions)
     .values({ goalId })
     .returning()
+
   const goalCompletion = insertResult[0]
 
-  return {
-    goalCompletion,
-  }
+  return { goalCompletion }
 }
